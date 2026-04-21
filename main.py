@@ -91,10 +91,19 @@ def initialize_engine():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start-up logic: fire and forget initialization to keep Vercel happy."""
+    print("[SYSTEM] FastAPI Lifespan starting...")
     import asyncio
-    # Immediate response to Vercel that we are UP
-    asyncio.create_task(asyncio.to_thread(initialize_engine))
+    
+    # Define a helper to run the sync function in a thread safely
+    def run_init():
+        initialize_engine()
+
+    # Use the running loop to schedule the initialization
+    loop = asyncio.get_running_loop()
+    loop.run_in_executor(None, run_init)
+    
     yield
+    print("[SYSTEM] FastAPI Lifespan shutting down.")
     _state.clear()
 
 
