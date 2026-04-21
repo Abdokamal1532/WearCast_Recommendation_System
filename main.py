@@ -1,5 +1,5 @@
 # =============================================================================
-# main.py — Consolidated Bulletproof Vercel Entrypoint
+# main.py — TRULY BULLETPROOF Vercel Entrypoint
 # =============================================================================
 
 import os
@@ -9,10 +9,10 @@ from contextlib import asynccontextmanager
 from typing import Optional, Any
 from datetime import datetime
 
-# Add root to sys.path for local running support
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# CRITICAL: NO imports from 'src' or heavy libraries at the top level!
+# This ensures the process starts in milliseconds, avoiding Vercel timeouts.
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -28,14 +28,22 @@ _state: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 def initialize_engine():
-    """Logic to load/reload all models with lazy imports for Vercel speed."""
+    """Logic to load all models. Triggered AFTER startup."""
     global _state
-    print("\n[SYSTEM] Starting AI Engine initialization (Lazy Load)...")
+    print("\n[SYSTEM] Starting AI Engine initialization (Background)...")
     
     try:
-        # Move heavy imports INSIDE to prevent startup timeout
+        # Move ALL heavy imports INSIDE the background task
+        print("[SYSTEM] Loading heavy libraries (pandas, sklearn)...")
         import pandas as pd
         import numpy as np
+        
+        # Add root to sys.path local import support
+        root = os.path.dirname(os.path.abspath(__file__))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+            
+        print("[SYSTEM] Loading project modules (src.*)...")
         import config
         from src.preprocessor import load_processed
         from src.models.content_based import ContentBasedModel
@@ -79,11 +87,13 @@ def initialize_engine():
             "status": "online",
             "last_updated": str(datetime.now())
         })
-        print("[SUCCESS] AI Engine is now online.")
+        print("[SUCCESS] AI Engine is now online and ready.")
 
     except Exception as e:
         error_msg = f"Initialization failed: {str(e)}"
         print(f"[CRITICAL] {error_msg}")
+        import traceback
+        traceback.print_exc()
         _state["status"] = "error"
         _state["error"] = error_msg
 
@@ -91,19 +101,14 @@ def initialize_engine():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start-up logic: fire and forget initialization to keep Vercel happy."""
-    print("[SYSTEM] FastAPI Lifespan starting...")
+    print("[SYSTEM] Application process started successfully.")
     import asyncio
     
-    # Define a helper to run the sync function in a thread safely
-    def run_init():
-        initialize_engine()
-
-    # Use the running loop to schedule the initialization
+    # Run the expensive initialization in a separate thread so it doesn't block the event loop
     loop = asyncio.get_running_loop()
-    loop.run_in_executor(None, run_init)
+    loop.run_in_executor(None, initialize_engine)
     
     yield
-    print("[SYSTEM] FastAPI Lifespan shutting down.")
     _state.clear()
 
 
@@ -113,7 +118,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="WearCast Recommender",
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan
 )
 
@@ -135,16 +140,6 @@ class RecommendRequest(BaseModel):
     filters: Optional[FilterContext] = None
     excludeSeen: bool = False
 
-class RecommendedItem(BaseModel):
-    productId: str
-    score: float
-    cb_score: float
-    cf_score: float
-    price: Optional[float] = None
-    categoryName: Optional[str] = None
-    dressStyle: Optional[str] = None
-    targetAudience: Optional[Any] = None
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -152,11 +147,13 @@ class RecommendedItem(BaseModel):
 @app.get("/")
 @app.get("/health")
 def health():
+    """Returns the current engine status."""
     return {
         "status": _state.get("status"),
         "engine": "active",
         "error": _state.get("error"),
-        "last_updated": _state.get("last_updated")
+        "last_updated": _state.get("last_updated"),
+        "server_time": str(datetime.now())
     }
 
 @app.post("/recommend")
@@ -165,7 +162,10 @@ def recommend(request: RecommendRequest):
     ranker = _state.get("ranker")
     
     if not retriever or not ranker:
-        raise HTTPException(status_code=503, detail="AI Engine is still loading or failed. Check /health.")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"AI Engine is still loading or failed. Status: {_state.get('status')}. Error: {_state.get('error')}"
+        )
 
     try:
         candidates = retriever.retrieve(request.userId, exclude_seen=request.excludeSeen)
