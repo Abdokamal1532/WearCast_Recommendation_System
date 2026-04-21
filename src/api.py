@@ -39,28 +39,32 @@ _state: dict = {}
 
 
 def _load_catalog() -> list[dict]:
-    with open(config.RAW_EVENTS_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data.get("catalog", [])
+    try:
+        with open(config.RAW_EVENTS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("catalog", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        print(f"[API] [WARN] Catalog file not found or invalid: {config.RAW_EVENTS_PATH}")
+        return []
 
 
 def initialize_engine():
     """Logic to load/reload all models and data into the global state."""
     print("\n[API] [SYSTEM] Initializing AI Engine...")
     try:
-        # Step 1: Force a sync with the Database to ensure we have the latest reality
+        # Step 1: Force a sync with the Database
         try:
             from src.db_loader import sync
             print("[API] [DB] Synchronizing with SQL Server on startup...")
             sync()
         except Exception as sync_err:
             print(f"[API] [DB] [WARN] Synchronization failed: {sync_err}")
-            print("[API] [DB] [INFO] Continuing with local cached data if available.")
 
-        # Step 2: Load the freshly synced data (or existing local data)
+        # Step 2: Load data
         interactions_df, item_features_df, user_profiles_df = load_processed()
         catalog = _load_catalog()
 
+        # Step 3: Initialize models
         cb_model = ContentBasedModel(item_features_df, user_profiles_df)
         cf_model = CollaborativeModel.load(interactions_df)
         hybrid_model = HybridModel(cb_model, cf_model, interactions_df, catalog)
@@ -75,10 +79,11 @@ def initialize_engine():
         _state["interactions_df"] = interactions_df
         _state["catalog"] = catalog
 
-        print("[API] [SUCCESS] AI Engine is now online and updated.")
+        print("[API] [SUCCESS] AI Engine is now online.")
     except Exception as e:
         print(f"[API] [CRITICAL ERROR] Failed to initialize AI Engine: {e}")
-        raise e
+        # We don't raise 'e' here to prevent the FastAPI process from crashing on startup.
+        # Endpoints will handle cases where the state is missing.
 
 
 @asynccontextmanager

@@ -412,10 +412,25 @@ class Preprocessor:
 # ---------------------------------------------------------------------------
 
 def load_processed() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Load already-processed CSVs from disk."""
-    interactions = pd.read_csv(config.INTERACTIONS_PATH)
-    item_features = pd.read_csv(config.ITEM_FEATURES_PATH)
-    user_profiles = pd.read_csv(config.USER_PROFILES_PATH)
+    """Load already-processed CSVs from disk. Handles missing files gracefully."""
+    try:
+        interactions = pd.read_csv(config.INTERACTIONS_PATH)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        print(f"[Preprocessor] [WARN] Interactions file not found or empty: {config.INTERACTIONS_PATH}")
+        interactions = pd.DataFrame(columns=["userId", "productId", "weight"])
+
+    try:
+        item_features = pd.read_csv(config.ITEM_FEATURES_PATH)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        print(f"[Preprocessor] [WARN] Item features file not found or empty: {config.ITEM_FEATURES_PATH}")
+        item_features = pd.DataFrame(columns=["productId"])
+
+    try:
+        user_profiles = pd.read_csv(config.USER_PROFILES_PATH)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        print(f"[Preprocessor] [WARN] User profiles file not found or empty: {config.USER_PROFILES_PATH}")
+        user_profiles = pd.DataFrame(columns=["userId"])
+
     return interactions, item_features, user_profiles
 
 

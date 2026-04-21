@@ -201,13 +201,20 @@ class CollaborativeModel:
     @classmethod
     def load(cls, interactions_df: pd.DataFrame, path: str = config.LIGHTFM_MODEL_PATH) -> "CollaborativeModel":
         instance = cls(interactions_df)
-        with open(path, "rb") as f:
-            data = pickle.load(f)
-        instance.model = data["model"]
-        instance.user_embeddings = data["user_embeddings"]
-        instance.item_embeddings = data["item_embeddings"]
-        instance._user_id_map = data["user_id_map"]
-        instance._item_id_map = data["item_id_map"]
-        instance._inv_item_map = data["inv_item_map"]
-        print(f"[CollaborativeModel] SVD Model loaded <- {path}")
+        try:
+            with open(path, "rb") as f:
+                data = pickle.load(f)
+            instance.model = data["model"]
+            instance.user_embeddings = data["user_embeddings"]
+            instance.item_embeddings = data["item_embeddings"]
+            instance._user_id_map = data["user_id_map"]
+            instance._item_id_map = data["item_id_map"]
+            instance._inv_item_map = data["inv_item_map"]
+            print(f"[CollaborativeModel] SVD Model loaded <- {path}")
+        except (FileNotFoundError, EOFError, pickle.UnpicklingError):
+            print(f"[CollaborativeModel] [WARN] Model file not found at {path}. Attempting to train fresh model...")
+            if not interactions_df.empty:
+                instance.train()
+            else:
+                print("[CollaborativeModel] [ERR] No interactions to train on. Model remains uninitialized.")
         return instance
