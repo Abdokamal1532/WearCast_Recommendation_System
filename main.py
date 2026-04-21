@@ -190,5 +190,16 @@ def trending(top_k: int = 10):
     return {"trending": hybrid.trending_fallback(top_k)}
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--from-db", action="store_true")
+    args, unknown = parser.parse_known_args()
+
+    if args.from_db:
+        # If running for training/sync, prioritize that and don't start the server
+        print("\n[CLI] Running in Training/Extraction mode (No server start).")
+        initialize_engine()
+    else:
+        import uvicorn
+        print("\n[CLI] Running in Server mode.")
+        uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -74,7 +74,7 @@ def _notify_reload():
     """Notify the FastAPI service to reload models."""
     try:
         import requests
-        reload_url = os.getenv("RELOAD_URL", "https://wear-cast-recommendation-system.vercel.app/internal/reload")
+        reload_url = os.getenv("RELOAD_URL", "https://wear-cast-recommendation-system-1.vercel.app/internal/reload")
         print(f"  [SIGNAL] Notifying API to reload models at {reload_url}...")
         resp = requests.post(reload_url, timeout=10)
         if resp.status_code == 200:

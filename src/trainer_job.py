@@ -18,7 +18,7 @@ os.environ["PYTHONPATH"] = os.getcwd()
 
 # Configuration
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", 1))
-RELOAD_URL = os.getenv("RELOAD_URL", "https://wear-cast-recommendation-system.vercel.app/internal/reload")
+RELOAD_URL = os.getenv("RELOAD_URL", "https://wear-cast-recommendation-system-1.vercel.app/internal/reload")
 
 def run_training_pipeline():
     """Executes the main training script as a subprocess."""
