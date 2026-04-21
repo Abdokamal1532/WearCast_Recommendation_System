@@ -211,8 +211,8 @@ class CollaborativeModel:
             instance._item_id_map = data["item_id_map"]
             instance._inv_item_map = data["inv_item_map"]
             print(f"[CollaborativeModel] SVD Model loaded <- {path}")
-        except (FileNotFoundError, EOFError, pickle.UnpicklingError):
-            print(f"[CollaborativeModel] [WARN] Model file not found at {path}. Attempting to train fresh model...")
+        except Exception as e:
+            print(f"[CollaborativeModel] [WARN] Model load failed ({e}). Attempting to train fresh model...")
             if not interactions_df.empty:
                 instance.train()
             else:
