@@ -88,8 +88,13 @@ def initialize_engine():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load models once at startup, release on shutdown."""
-    initialize_engine()
+    """
+    Load models in the background to prevent Vercel startup timeouts (10s limit).
+    The app will start immediately, and models will load shortly after.
+    """
+    import asyncio
+    # Start initialization in the background
+    asyncio.create_task(asyncio.to_thread(initialize_engine))
     yield
     _state.clear()
 
