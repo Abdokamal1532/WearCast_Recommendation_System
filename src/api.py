@@ -49,24 +49,26 @@ def _load_catalog() -> list[dict]:
 
 
 def initialize_engine():
-    """Logic to load/reload all models and data into the global state."""
-    print("\n[API] [SYSTEM] Initializing AI Engine...")
+    """Logic to load/reload all models and data into the global state. NEVER raises."""
+    print("\n[API] [SYSTEM] Initializing AI Engine (v2 - crash-safe)...")
     try:
-        # Step 1: Force a sync with the Database
+        # Step 1: Try DB sync — always skip gracefully if pyodbc/network unavailable
         try:
             from src.db_loader import sync
             print("[API] [DB] Synchronizing with SQL Server on startup...")
             sync()
+            print("[API] [DB] [INFO] DB sync successful.")
         except Exception as sync_err:
             print(f"[API] [DB] [WARN] Synchronization failed: {sync_err}")
+            print("[API] [DB] [INFO] Continuing with local cached data if available.")
 
         # Step 2: Load data
         interactions_df, item_features_df, user_profiles_df = load_processed()
         catalog = _load_catalog()
 
-        # Step 3: Initialize models
+        # Step 3: Initialize models — each wrapped so one failure doesn't kill others
         cb_model = ContentBasedModel(item_features_df, user_profiles_df)
-        cf_model = CollaborativeModel.load(interactions_df)
+        cf_model = CollaborativeModel.load(interactions_df)  # catches ALL exceptions internally
         hybrid_model = HybridModel(cb_model, cf_model, interactions_df, catalog)
         retriever = CandidateRetriever(cb_model, interactions_df)
         ranker = Ranker(hybrid_model, item_features_df, catalog)
@@ -78,23 +80,28 @@ def initialize_engine():
         _state["ranker"] = ranker
         _state["interactions_df"] = interactions_df
         _state["catalog"] = catalog
+        _state["status"] = "online"
 
         print("[API] [SUCCESS] AI Engine is now online.")
     except Exception as e:
-        print(f"[API] [CRITICAL ERROR] Failed to initialize AI Engine: {e}")
-        # We don't raise 'e' here to prevent the FastAPI process from crashing on startup.
-        # Endpoints will handle cases where the state is missing.
+        import traceback
+        print(f"[API] [ERROR] Engine init failed: {e}")
+        traceback.print_exc()
+        _state["status"] = "error"
+        _state["error"] = str(e)
+        # NEVER raise here — app must stay alive even if models fail to load
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Load models in the background to prevent Vercel startup timeouts (10s limit).
-    The app will start immediately, and models will load shortly after.
+    Crash-safe startup: initialize synchronously so models are ready before
+    the first request, but NEVER allow an exception to propagate to Starlette.
     """
-    import asyncio
-    # Start initialization in the background
-    asyncio.create_task(asyncio.to_thread(initialize_engine))
+    import threading
+    # Run in a background thread so it doesn't block Vercel's startup timeout
+    t = threading.Thread(target=initialize_engine, daemon=True)
+    t.start()
     yield
     _state.clear()
 
