@@ -44,7 +44,20 @@ def get_case_insensitive(d, key, default=None):
 
 def fetch_from_db():
     print(f"[DataLoader] Connecting to database...")
-    engine = create_engine(config.DB_CONNECTION_STRING)
+    
+    # Check if we have the necessary driver/setup
+    if "pyodbc" in config.DB_CONNECTION_STRING and "mssql" in config.DB_CONNECTION_STRING:
+        try:
+            import pyodbc
+        except ImportError:
+            print("[DataLoader] [ERR] 'pyodbc' is not installed. SQL Server connection skipped.")
+            raise RuntimeError("pyodbc not installed")
+
+    try:
+        engine = create_engine(config.DB_CONNECTION_STRING)
+    except Exception as e:
+        print(f"[DataLoader] [ERR] Could not create engine: {e}")
+        raise e
     
     with engine.connect() as conn:
         # 1. Fetch Categories

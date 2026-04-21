@@ -49,11 +49,15 @@ def initialize_engine():
     print("\n[API] [SYSTEM] Initializing AI Engine...")
     try:
         # Step 1: Force a sync with the Database to ensure we have the latest reality
-        from src.db_loader import sync
-        print("[API] [DB] Synchronizing with SQL Server on startup...")
-        sync()
+        try:
+            from src.db_loader import sync
+            print("[API] [DB] Synchronizing with SQL Server on startup...")
+            sync()
+        except Exception as sync_err:
+            print(f"[API] [DB] [WARN] Synchronization failed: {sync_err}")
+            print("[API] [DB] [INFO] Continuing with local cached data if available.")
 
-        # Step 2: Load the freshly synced data
+        # Step 2: Load the freshly synced data (or existing local data)
         interactions_df, item_features_df, user_profiles_df = load_processed()
         catalog = _load_catalog()
 
